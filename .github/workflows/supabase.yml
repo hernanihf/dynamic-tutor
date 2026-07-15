@@ -11,34 +11,38 @@ on:
 jobs:
   migrate:
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Link project
-        run: supabase link --project-ref "$PROJECT_REF"
-
       - name: Apply pending migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
           for file in $(ls supabase/migrations/*.sql | sort); do
-            version=$(basename "$file" .sql | cut -d_ -f1)
-            echo "Checking migration $version..."
+            echo "Applying $file..."
+            sql=$(cat "$file")
+            response=$(curl -s -w "\n%{http_code}" -X POST \
+              "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": $(echo "$sql" | jq -Rs .)}")
 
-            already_applied=$(supabase migration list 2>/dev/null | grep "$version" | grep -c "applied" || true)
+            http_code=$(echo "$response" | tail -n1)
+            body=$(echo "$response" | head -n-1)
 
-            if [ "$already_applied" -gt 0 ]; then
-              echo "  → already applied, skipping"
+            echo "  HTTP $http_code: $body"
+
+            if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
+              # Check if it's an "already exists" error — safe to ignore
+              if echo "$body" | grep -q "already exists"; then
+                echo "  → already exists, skipping"
+              else
+                echo "  ✗ migration failed"
+                exit 1
+              fi
             else
-              echo "  → applying $file"
-              supabase db execute --file "$file"
-              supabase migration repair --status applied "$version"
-              echo "  ✓ done"
+              echo "  ✓ applied"
             fi
           done
