@@ -125,6 +125,13 @@ function Home() {
         >
           <LogOut />
         </Button>
+        {user?.user_metadata?.avatar_url && (
+          <img
+            src={user.user_metadata.avatar_url as string}
+            alt={user.user_metadata.full_name as string ?? 'Avatar'}
+            className="size-9 rounded-full border border-border object-cover"
+          />
+        )}
       </div>
 
       <main className="w-full max-w-lg">
