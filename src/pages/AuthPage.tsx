@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from 'react'
-import { Moon, Sun, Loader2 } from 'lucide-react'
+import { useState, useEffect, type FormEvent } from 'react'
+import { Moon, Sun, Loader2, MailCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTheme } from '@/hooks/useTheme'
 import { useAuth } from '@/hooks/useAuth'
+
+const RESEND_COOLDOWN = 60 // seconds
 
 function ThemeToggle() {
   const { isDark, toggleTheme } = useTheme()
@@ -26,20 +28,32 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [cooldown, setCooldown] = useState(0)
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!email.trim()) return
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const timer = setInterval(() => setCooldown((c) => c - 1), 1000)
+    return () => clearInterval(timer)
+  }, [cooldown])
+
+  async function sendLink() {
+    if (!email.trim() || loading || cooldown > 0) return
     setLoading(true)
     setError(null)
     try {
       await signInWithEmail(email.trim())
       setSent(true)
+      setCooldown(RESEND_COOLDOWN)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al enviar el enlace')
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    void sendLink()
   }
 
   return (
@@ -58,10 +72,31 @@ export default function AuthPage() {
 
         {sent ? (
           <div className="rounded-xl border border-border bg-background p-6 text-center shadow-xs">
+            <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-primary/10">
+              <MailCheck className="size-5 text-primary" />
+            </div>
             <p className="text-sm font-medium text-foreground">¡Revisa tu email!</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Te enviamos un enlace mágico a <strong>{email}</strong>. Hacé clic en él para entrar.
+              Enviamos un enlace mágico a <strong>{email}</strong>.
             </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={cooldown > 0 || loading}
+              onClick={() => void sendLink()}
+              className="mt-4 w-full"
+            >
+              {loading && <Loader2 className="animate-spin" />}
+              {cooldown > 0 ? `Reenviar en ${cooldown}s` : 'Reenviar enlace'}
+            </Button>
+            <button
+              type="button"
+              onClick={() => { setSent(false); setError(null) }}
+              className="mt-2 text-xs text-muted-foreground underline-offset-2 hover:underline"
+            >
+              Usar otro email
+            </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -81,9 +116,7 @@ export default function AuthPage() {
               />
             </div>
 
-            {error && (
-              <p className="text-left text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="text-left text-sm text-destructive">{error}</p>}
 
             <Button
               type="submit"
