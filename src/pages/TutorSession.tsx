@@ -4,6 +4,7 @@ import { ArrowLeft, Send, Moon, Sun, Bot, User, AlertCircle, Loader2 } from 'luc
 import { Button } from '@/components/ui/button'
 import { useTheme } from '@/hooks/useTheme'
 import { useTutor, type Message } from '@/hooks/useTutor'
+import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { useEffect as useEffectOnce, useState as useStateOnce } from 'react'
@@ -18,7 +19,7 @@ function ThemeToggle() {
   )
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message, avatarUrl }: { message: Message; avatarUrl?: string }) {
   const isUser = message.role === 'user'
   const html = message.content
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -27,12 +28,16 @@ function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className={cn('flex items-start gap-3', isUser && 'flex-row-reverse')}>
-      <div className={cn(
-        'flex size-8 shrink-0 items-center justify-center rounded-full',
-        isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
-      )}>
-        {isUser ? <User className="size-4" /> : <Bot className="size-4" />}
-      </div>
+      {isUser && avatarUrl ? (
+        <img src={avatarUrl} alt="Avatar" className="size-8 shrink-0 rounded-full object-cover" />
+      ) : (
+        <div className={cn(
+          'flex size-8 shrink-0 items-center justify-center rounded-full',
+          isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+        )}>
+          {isUser ? <User className="size-4" /> : <Bot className="size-4" />}
+        </div>
+      )}
       <div
         className={cn(
           'max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
@@ -65,6 +70,8 @@ function TypingIndicator() {
 export default function TutorSession() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined
 
   const [topic, setTopic] = useStateOnce<string>('')
   useEffectOnce(() => {
@@ -138,7 +145,7 @@ export default function TutorSession() {
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+            messages.map((msg) => <MessageBubble key={msg.id} message={msg} avatarUrl={avatarUrl} />)
           )}
           {isLoading && !isStreaming && <TypingIndicator />}
           {error && (
