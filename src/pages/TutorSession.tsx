@@ -1,11 +1,12 @@
 import { useRef, useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useParams, useNavigate } from 'react-router'
-import { ArrowLeft, Send, Moon, Sun, Bot, User, AlertCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Send, Moon, Sun, Bot, User, AlertCircle, Loader2, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTheme } from '@/hooks/useTheme'
 import { useTutor, type Message } from '@/hooks/useTutor'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { exportConversation } from '@/lib/exportPDF'
 import { cn } from '@/lib/utils'
 import { useEffect as useEffectOnce, useState as useStateOnce } from 'react'
 
@@ -135,6 +136,16 @@ export default function TutorSession() {
             <p className="text-xs text-muted-foreground">{isStreaming ? 'Escribiendo…' : 'Tutor IA'}</p>
           </div>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => exportConversation(topic, messages)}
+          aria-label="Descargar conversación como PDF"
+          disabled={messages.length === 0}
+        >
+          <Download />
+        </Button>
         <ThemeToggle />
       </header>
 
