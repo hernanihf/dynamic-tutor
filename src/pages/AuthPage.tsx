@@ -56,7 +56,7 @@ export default function AuthPage() {
           <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">
             AI-Tutor
           </h1>
-          <p className="mt-4 text-lg text-muted-foreground">
+          <p className="mt-4 text-lg text-muted-foreground whitespace-nowrap">
             Aprende cualquier tema con un tutor impulsado por IA.
           </p>
         </header>
