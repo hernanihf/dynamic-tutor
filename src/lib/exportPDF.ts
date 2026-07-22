@@ -104,6 +104,7 @@ export function exportConversation(topic: string, messages: Message[]) {
     @media print {
       body { padding: 0; }
       .message { break-inside: avoid; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     }
   </style>
 </head>
