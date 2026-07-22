@@ -1,4 +1,4 @@
-# dynamic-tutor
+# AI-Tutor
 
 Tutor interactivo impulsado por IA. Aprende cualquier tema con respuestas en streaming de Claude.
 
