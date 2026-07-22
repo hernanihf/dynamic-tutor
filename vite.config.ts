@@ -15,8 +15,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
-        name: 'dynamic-tutor',
-        short_name: 'dynamic-tutor',
+        name: 'AI-Tutor',
+        short_name: 'AI-Tutor',
         description: 'Aprende cualquier tema con un tutor interactivo impulsado por IA.',
         theme_color: '#6366f1',
         background_color: '#0f172a',

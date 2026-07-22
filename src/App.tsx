@@ -137,7 +137,7 @@ function Home() {
       <main className="w-full max-w-lg">
         <header className="mb-10 text-center">
           <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">
-            dynamic-tutor
+            AI-Tutor
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
             Aprende cualquier tema con un tutor interactivo impulsado por IA.
