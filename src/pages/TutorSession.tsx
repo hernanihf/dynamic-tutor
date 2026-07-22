@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useParams, useNavigate } from 'react-router'
-import { ArrowLeft, Send, Moon, Sun, Bot, User, AlertCircle, Loader2, Download } from 'lucide-react'
+import { ArrowLeft, Send, Moon, Sun, Bot, User, AlertCircle, Loader2, Download, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTheme } from '@/hooks/useTheme'
 import { useTutor, type Message } from '@/hooks/useTutor'
@@ -86,13 +86,25 @@ export default function TutorSession() {
 
   const { messages, isLoading, error, sendMessage, initialized } = useTutor(id, topic)
   const [input, setInput] = useState('')
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isStreaming = isLoading && messages[messages.length - 1]?.role === 'assistant'
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
+
+  useEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+    function onScroll() {
+      setShowScrollBtn(el!.scrollHeight - el!.scrollTop - el!.clientHeight > 120)
+    }
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
 
   function resizeTextarea() {
     const el = textareaRef.current
@@ -149,7 +161,18 @@ export default function TutorSession() {
         <ThemeToggle />
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 py-6">
+      <div className="relative flex-1 overflow-hidden">
+      {showScrollBtn && (
+        <button
+          type="button"
+          onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+          className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md backdrop-blur-sm transition hover:text-foreground"
+        >
+          <ChevronDown className="size-3.5" />
+          Ir al final
+        </button>
+      )}
+      <main ref={mainRef} className="h-full overflow-y-auto px-4 py-6">
         <div className="mx-auto flex max-w-2xl lg:max-w-4xl xl:max-w-5xl flex-col gap-4">
           {!initialized ? (
             <div className="flex justify-center pt-8">
@@ -167,6 +190,7 @@ export default function TutorSession() {
           <div ref={bottomRef} />
         </div>
       </main>
+      </div>
 
       <footer className="shrink-0 border-t border-border bg-background/80 px-4 py-4 backdrop-blur-sm">
         <form onSubmit={(e: FormEvent) => { e.preventDefault(); void submit() }}
