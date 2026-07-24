@@ -23,12 +23,14 @@ async function streamGroq({ systemPrompt, history, userMessage, onChunk }: Strea
   if (!apiKey) throw new Error('Falta VITE_GROQ_API_KEY')
 
   const client = new Groq({ apiKey, dangerouslyAllowBrowser: true })
+  // Groq has a ~6000 token limit per request — keep last 10 messages to stay safe
+  const trimmedHistory = history.slice(-10)
   const stream = await client.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     stream: true,
     messages: [
       { role: 'system', content: systemPrompt },
-      ...history.map((m) => ({ role: m.role, content: m.content })),
+      ...trimmedHistory.map((m) => ({ role: m.role, content: m.content })),
       { role: 'user', content: userMessage },
     ],
   })
