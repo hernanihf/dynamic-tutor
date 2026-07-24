@@ -1,11 +1,14 @@
 import { GoogleGenAI } from '@google/genai'
 import Anthropic from '@anthropic-ai/sdk'
+import Groq from 'groq-sdk'
 
-export type Provider = 'gemini' | 'anthropic'
+export type Provider = 'groq' | 'gemini' | 'anthropic'
 
 export function getProvider(): Provider {
   const p = import.meta.env.VITE_AI_PROVIDER as string | undefined
-  return p === 'anthropic' ? 'anthropic' : 'gemini'
+  if (p === 'anthropic') return 'anthropic'
+  if (p === 'gemini') return 'gemini'
+  return 'groq'
 }
 
 interface StreamOptions {
@@ -13,6 +16,25 @@ interface StreamOptions {
   history: { role: 'user' | 'assistant'; content: string }[]
   userMessage: string
   onChunk: (text: string) => void
+}
+
+async function streamGroq({ systemPrompt, history, userMessage, onChunk }: StreamOptions) {
+  const apiKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined
+  if (!apiKey) throw new Error('Falta VITE_GROQ_API_KEY')
+
+  const client = new Groq({ apiKey, dangerouslyAllowBrowser: true })
+  const stream = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    stream: true,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...history.map((m) => ({ role: m.role, content: m.content })),
+      { role: 'user', content: userMessage },
+    ],
+  })
+  for await (const chunk of stream) {
+    onChunk(chunk.choices[0]?.delta?.content ?? '')
+  }
 }
 
 async function streamGemini({ systemPrompt, history, userMessage, onChunk }: StreamOptions) {
@@ -40,15 +62,14 @@ async function streamAnthropic({ systemPrompt, history, userMessage, onChunk }: 
   if (!apiKey) throw new Error('Falta VITE_ANTHROPIC_API_KEY')
 
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
-  const apiMessages = [
-    ...history.map((m) => ({ role: m.role, content: m.content })),
-    { role: 'user' as const, content: userMessage },
-  ]
   const stream = client.messages.stream({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     system: systemPrompt,
-    messages: apiMessages,
+    messages: [
+      ...history.map((m) => ({ role: m.role, content: m.content })),
+      { role: 'user', content: userMessage },
+    ],
   })
   for await (const chunk of stream) {
     if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
@@ -57,17 +78,37 @@ async function streamAnthropic({ systemPrompt, history, userMessage, onChunk }: 
   }
 }
 
+const providers: Record<Provider, (opts: StreamOptions) => Promise<void>> = {
+  groq: streamGroq,
+  gemini: streamGemini,
+  anthropic: streamAnthropic,
+}
+
+const fallbackOrder: Record<Provider, Provider[]> = {
+  groq: ['gemini', 'anthropic'],
+  gemini: ['groq', 'anthropic'],
+  anthropic: ['groq', 'gemini'],
+}
+
+function isQuotaError(err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /429|quota|RESOURCE_EXHAUSTED|credit balance|rate.?limit/i.test(msg)
+}
+
 export async function streamMessage(opts: StreamOptions) {
   const primary = getProvider()
-  const fallback: Provider = primary === 'gemini' ? 'anthropic' : 'gemini'
+  const chain = [primary, ...fallbackOrder[primary]]
 
-  try {
-    await (primary === 'gemini' ? streamGemini(opts) : streamAnthropic(opts))
-  } catch (err) {
-    const is429 = err instanceof Error && (err.message.includes('429') || err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED') || err.message.includes('credit balance'))
-    if (!is429) throw err
-
-    console.warn(`[aiClient] ${primary} quota exceeded, falling back to ${fallback}`)
-    await (fallback === 'gemini' ? streamGemini(opts) : streamAnthropic(opts))
+  for (const provider of chain) {
+    try {
+      await providers[provider](opts)
+      return
+    } catch (err) {
+      if (isQuotaError(err) && provider !== chain[chain.length - 1]) {
+        console.warn(`[aiClient] ${provider} quota exceeded, trying next provider`)
+        continue
+      }
+      throw err
+    }
   }
 }
