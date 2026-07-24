@@ -15,46 +15,59 @@ interface StreamOptions {
   onChunk: (text: string) => void
 }
 
-export async function streamMessage({ systemPrompt, history, userMessage, onChunk }: StreamOptions) {
-  const provider = getProvider()
+async function streamGemini({ systemPrompt, history, userMessage, onChunk }: StreamOptions) {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
+  if (!apiKey) throw new Error('Falta VITE_GEMINI_API_KEY')
 
-  if (provider === 'gemini') {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
-    if (!apiKey) throw new Error('Falta VITE_GEMINI_API_KEY')
+  const client = new GoogleGenAI({ apiKey })
+  const geminiHistory = history.map((m) => ({
+    role: m.role === 'user' ? 'user' : 'model',
+    parts: [{ text: m.content }],
+  }))
+  const chat = client.chats.create({
+    model: 'gemini-1.5-flash',
+    config: { systemInstruction: systemPrompt },
+    history: geminiHistory,
+  })
+  const stream = await chat.sendMessageStream({ message: userMessage })
+  for await (const chunk of stream) {
+    onChunk(chunk.text ?? '')
+  }
+}
 
-    const client = new GoogleGenAI({ apiKey })
-    const geminiHistory = history.map((m) => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }],
-    }))
-    const chat = client.chats.create({
-      model: 'gemini-1.5-flash',
-      config: { systemInstruction: systemPrompt },
-      history: geminiHistory,
-    })
-    const stream = await chat.sendMessageStream({ message: userMessage })
-    for await (const chunk of stream) {
-      onChunk(chunk.text ?? '')
+async function streamAnthropic({ systemPrompt, history, userMessage, onChunk }: StreamOptions) {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined
+  if (!apiKey) throw new Error('Falta VITE_ANTHROPIC_API_KEY')
+
+  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
+  const apiMessages = [
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user' as const, content: userMessage },
+  ]
+  const stream = client.messages.stream({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: apiMessages,
+  })
+  for await (const chunk of stream) {
+    if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+      onChunk(chunk.delta.text)
     }
-  } else {
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined
-    if (!apiKey) throw new Error('Falta VITE_ANTHROPIC_API_KEY')
+  }
+}
 
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
-    const apiMessages = [
-      ...history.map((m) => ({ role: m.role, content: m.content })),
-      { role: 'user' as const, content: userMessage },
-    ]
-    const stream = client.messages.stream({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: apiMessages,
-    })
-    for await (const chunk of stream) {
-      if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-        onChunk(chunk.delta.text)
-      }
-    }
+export async function streamMessage(opts: StreamOptions) {
+  const primary = getProvider()
+  const fallback: Provider = primary === 'gemini' ? 'anthropic' : 'gemini'
+
+  try {
+    await (primary === 'gemini' ? streamGemini(opts) : streamAnthropic(opts))
+  } catch (err) {
+    const is429 = err instanceof Error && (err.message.includes('429') || err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED') || err.message.includes('credit balance'))
+    if (!is429) throw err
+
+    console.warn(`[aiClient] ${primary} quota exceeded, falling back to ${fallback}`)
+    await (fallback === 'gemini' ? streamGemini(opts) : streamAnthropic(opts))
   }
 }
