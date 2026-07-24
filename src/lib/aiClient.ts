@@ -25,7 +25,7 @@ async function streamGemini({ systemPrompt, history, userMessage, onChunk }: Str
     parts: [{ text: m.content }],
   }))
   const chat = client.chats.create({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash-lite',
     config: { systemInstruction: systemPrompt },
     history: geminiHistory,
   })
